@@ -13,6 +13,9 @@ const storageHost = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.N
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
+    // Serve image files as they are. Vercel's optimizer is metered, and once the Hobby
+    // allowance runs out it answers 402 and every image on the site breaks.
+    unoptimized: true,
     remotePatterns: storageHost ? [{ protocol: "https", hostname: storageHost, pathname: "/storage/v1/object/public/**" }] : [],
   },
   turbopack: {
