@@ -2,7 +2,10 @@
 
 import { useEffect, useRef } from "react";
 
-type Particle = { x: number; y: number; radius: number; speed: number; drift: number; phase: number; alpha: number };
+// ox and oy are how far the pointer has pushed a particle; they ease back to zero.
+type Particle = { x: number; y: number; ox: number; oy: number; radius: number; speed: number; drift: number; phase: number; alpha: number };
+type Bubble = { x: number; y: number; radius: number; rise: number; wobble: number; phase: number; life: number };
+type Ripple = { x: number; y: number; age: number };
 type Point = { x: number; y: number };
 type Swimmer = {
   // Stored in the fish's own direction of travel; left-swimmers are mirrored when drawn.
@@ -352,8 +355,25 @@ function drawSwimmer(context: CanvasRenderingContext2D, fish: Swimmer) {
   drawSideFin(context, fish);
 }
 
-// A calm underwater backdrop: rising particles and two fish. Pauses off-screen
-// and draws one still frame for visitors who prefer reduced motion.
+// Bubbles rise faster as they go and sway side to side, then fade near the top.
+function drawBubble(context: CanvasRenderingContext2D, bubble: Bubble, time: number) {
+  const x = bubble.x + Math.sin(time / 420 + bubble.phase) * bubble.wobble;
+  context.strokeStyle = `rgba(200, 244, 252, ${0.55 * bubble.life})`;
+  context.lineWidth = 1;
+  context.fillStyle = `rgba(114, 229, 242, ${0.08 * bubble.life})`;
+  context.beginPath();
+  context.arc(x, bubble.y, bubble.radius, 0, tau);
+  context.fill();
+  context.stroke();
+  context.fillStyle = `rgba(255, 255, 255, ${0.7 * bubble.life})`;
+  context.beginPath();
+  context.arc(x - bubble.radius * 0.35, bubble.y - bubble.radius * 0.35, bubble.radius * 0.22, 0, tau);
+  context.fill();
+}
+
+// A calm underwater backdrop: rising particles and two fish. A light follows the pointer,
+// particles part around it, and a click sends up bubbles. Pauses off-screen and draws
+// one still frame for visitors who prefer reduced motion.
 export function OceanCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -370,7 +390,12 @@ export function OceanCanvas() {
     let lastTime = 0;
     let particles: Particle[] = [];
     let swimmers: Swimmer[] = [];
+    let bubbles: Bubble[] = [];
+    let ripples: Ripple[] = [];
+    // The pointer is kept in page coordinates and placed on the canvas each frame, so it stays right while scrolling.
+    const client = { x: -9999, y: -9999 };
     const pointer = { x: -9999, y: -9999 };
+    const glow = { x: 0, y: 0, strength: 0 };
 
     const resize = () => {
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
@@ -383,6 +408,8 @@ export function OceanCanvas() {
       particles = Array.from({ length: count }, () => ({
         x: Math.random() * width,
         y: Math.random() * height,
+        ox: 0,
+        oy: 0,
         radius: 0.6 + Math.random() * 2.2,
         speed: 0.08 + Math.random() * 0.34,
         drift: 8 + Math.random() * 22,
@@ -394,6 +421,29 @@ export function OceanCanvas() {
 
     const draw = (time: number, step: number) => {
       context.clearRect(0, 0, width, height);
+
+      const box = canvas.getBoundingClientRect();
+      pointer.x = client.x - box.left;
+      pointer.y = client.y - box.top;
+      const inside = pointer.x >= 0 && pointer.x <= width && pointer.y >= 0 && pointer.y <= height;
+
+      // The light trails the pointer a little, and fades in and out as it enters and leaves.
+      if (glow.strength < 0.01) {
+        glow.x = pointer.x;
+        glow.y = pointer.y;
+      }
+      glow.x += (pointer.x - glow.x) * Math.min(1, 0.12 * step);
+      glow.y += (pointer.y - glow.y) * Math.min(1, 0.12 * step);
+      glow.strength += ((inside ? 1 : 0) - glow.strength) * Math.min(1, 0.08 * step);
+      if (glow.strength > 0.01) {
+        const reach = Math.min(320, width * 0.45);
+        const light = context.createRadialGradient(glow.x, glow.y, 0, glow.x, glow.y, reach);
+        light.addColorStop(0, `rgba(114, 229, 242, ${0.16 * glow.strength})`);
+        light.addColorStop(0.45, `rgba(60, 170, 220, ${0.07 * glow.strength})`);
+        light.addColorStop(1, "rgba(60, 170, 220, 0)");
+        context.fillStyle = light;
+        context.fillRect(glow.x - reach, glow.y - reach, reach * 2, reach * 2);
+      }
 
       swimmers.forEach((fish, index) => {
         const head = fish.spine[0];
@@ -411,15 +461,50 @@ export function OceanCanvas() {
         if (fish.spine[lastNode].x > width + 40) swimmers[index] = makeSwimmer(width, height, false, index === 0);
       });
 
+      const part = 130;
       for (const particle of particles) {
-        const x = particle.x + Math.sin(time / 2600 + particle.phase) * particle.drift;
+        const x = particle.x + Math.sin(time / 2600 + particle.phase) * particle.drift + particle.ox;
+        const y = particle.y + particle.oy;
+        const dx = x - pointer.x;
+        const dy = y - pointer.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > 0 && distance < part) {
+          const push = (1 - distance / part) * 2.2 * step;
+          particle.ox += (dx / distance) * push;
+          particle.oy += (dy / distance) * push;
+        }
+        particle.ox *= 0.95 ** step;
+        particle.oy *= 0.95 ** step;
+
         context.beginPath();
-        context.arc(x, particle.y, particle.radius, 0, tau);
+        context.arc(x, y, particle.radius, 0, tau);
         context.fillStyle = `rgba(114, 229, 242, ${particle.alpha})`;
         context.fill();
         particle.y -= particle.speed * step;
         if (particle.y < -8) particle.y = height + 8;
       }
+
+      for (const ripple of ripples) {
+        for (const lag of [0, 0.18]) {
+          const age = ripple.age - lag;
+          if (age <= 0 || age >= 1) continue;
+          context.strokeStyle = `rgba(160, 236, 248, ${(1 - age) * 0.45})`;
+          context.lineWidth = 1.5 * (1 - age) + 0.5;
+          context.beginPath();
+          context.arc(ripple.x, ripple.y, 10 + age * 110, 0, tau);
+          context.stroke();
+        }
+        ripple.age += 0.022 * step;
+      }
+      ripples = ripples.filter((ripple) => ripple.age < 1.2);
+
+      for (const bubble of bubbles) {
+        drawBubble(context, bubble, time);
+        bubble.y -= bubble.rise * step;
+        bubble.rise = Math.min(bubble.rise * 1.012 ** step, 4);
+        if (bubble.y < height * 0.25) bubble.life -= 0.012 * step;
+      }
+      bubbles = bubbles.filter((bubble) => bubble.life > 0 && bubble.y > -20);
     };
 
     const loop = (time: number) => {
@@ -431,9 +516,47 @@ export function OceanCanvas() {
     };
 
     const onPointer = (event: PointerEvent) => {
+      client.x = event.clientX;
+      client.y = event.clientY;
+    };
+    // A finger has no hover, so the light leaves when it lifts.
+    const onRelease = (event: PointerEvent) => {
+      if (event.pointerType === "mouse") return;
+      client.x = -9999;
+      client.y = -9999;
+    };
+
+    // A click or tap in the water: a ripple, a burst of bubbles, and any fish close by darts off.
+    const onPress = (event: PointerEvent) => {
       const box = canvas.getBoundingClientRect();
-      pointer.x = event.clientX - box.left;
-      pointer.y = event.clientY - box.top;
+      const x = event.clientX - box.left;
+      const y = event.clientY - box.top;
+      if (x < 0 || x > width || y < 0 || y > height) return;
+      onPointer(event);
+
+      ripples.push({ x, y, age: 0 });
+      const count = width < 768 ? 9 : 14;
+      for (let index = 0; index < count; index++) {
+        bubbles.push({
+          x: x + between(-18, 18),
+          y: y + between(-10, 10),
+          radius: between(2, 7),
+          rise: between(0.6, 1.6),
+          wobble: between(3, 10),
+          phase: Math.random() * tau,
+          life: 1,
+        });
+      }
+      if (bubbles.length > 140) bubbles = bubbles.slice(-140);
+
+      for (const fish of swimmers) {
+        const head = fish.spine[0];
+        const fishX = fish.mirrored ? width - x : x;
+        if (Math.hypot(head.x - fishX, head.y - y) < fish.size * 2.5) {
+          fish.burst = 3.6;
+          fish.heading += Math.sign(head.y - y || 1) * 0.5;
+        }
+      }
     };
 
     resize();
@@ -448,6 +571,9 @@ export function OceanCanvas() {
       draw(0, 0);
     } else {
       window.addEventListener("pointermove", onPointer, { passive: true });
+      window.addEventListener("pointerdown", onPress, { passive: true });
+      window.addEventListener("pointerup", onRelease, { passive: true });
+      window.addEventListener("pointercancel", onRelease, { passive: true });
       frame = requestAnimationFrame(loop);
     }
 
@@ -456,6 +582,9 @@ export function OceanCanvas() {
       observer.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("pointerdown", onPress);
+      window.removeEventListener("pointerup", onRelease);
+      window.removeEventListener("pointercancel", onRelease);
     };
   }, []);
 
