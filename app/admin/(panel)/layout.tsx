@@ -3,15 +3,16 @@ import { ExternalLink, LogOut } from "lucide-react";
 import { AdminNav } from "@/components/admin/AdminNav";
 import { Logo } from "@/components/shared/Logo";
 import { logout } from "@/lib/auth/actions";
+import { countPendingTestimonials } from "@/lib/admin/queries";
 import { requireAdmin } from "@/lib/auth/session";
 
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
-  const admin = await requireAdmin();
+  const [admin, pendingReviews] = await Promise.all([requireAdmin(), countPendingTestimonials()]);
   return (
     <div className="flex min-h-svh flex-col bg-abyss lg:flex-row">
       <aside className="border-b border-aqua/10 p-4 lg:sticky lg:top-0 lg:flex lg:h-svh lg:w-60 lg:shrink-0 lg:flex-col lg:border-r lg:border-b-0">
         <div className="mb-4 px-2"><Logo /></div>
-        <AdminNav />
+        <AdminNav pendingReviews={pendingReviews} />
         <div className="mt-4 flex items-center justify-between gap-3 px-3 text-sm text-mist lg:mt-auto lg:flex-col lg:items-start">
           <span className="truncate">{admin.name}</span>
           <div className="flex gap-4">

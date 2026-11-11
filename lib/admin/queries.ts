@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { faqs, inquiries, inquiryAttachments, inquiryNotes, inquiryStatus, portfolioImages, portfolioProjects, quotations, serviceCategories, services, teamMembers, testimonials, users } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/session";
@@ -81,7 +81,14 @@ export async function getTeamRow(id: string) {
 
 export async function listTestimonials() {
   await requireAdmin();
-  return db.select().from(testimonials).orderBy(desc(testimonials.createdAt));
+  // Pending reviews first, so new submissions are the first thing to moderate.
+  return db.select().from(testimonials).orderBy(sql`${testimonials.status} = 'pending' desc`, desc(testimonials.createdAt));
+}
+
+export async function countPendingTestimonials() {
+  await requireAdmin();
+  const [row] = await db.select({ total: count() }).from(testimonials).where(eq(testimonials.status, "pending"));
+  return row.total;
 }
 
 export async function getTestimonialRow(id: string) {

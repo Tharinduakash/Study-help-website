@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { StorageClient } from "@supabase/storage-js";
+import { SIGNATURE_BYTES } from "@/lib/file-signature";
 import { MEDIA_BUCKET, PRIVATE_BUCKET } from "@/lib/storage-config";
 
 export function storageConfigured() {
@@ -43,6 +44,26 @@ export async function listInquiryUploads(uploadId: string) {
     size: Number(file.metadata?.size ?? 0),
     contentType: (file.metadata?.mimetype as string | undefined) ?? null,
   }));
+}
+
+// Reads only the start of an uploaded file, so its real type can be checked without downloading it all.
+export async function readInquiryFileHead(path: string) {
+  const { data, error } = await storage().from(PRIVATE_BUCKET).createSignedUrl(path, 60);
+  if (error) throw error;
+  const response = await fetch(data.signedUrl, { headers: { Range: `bytes=0-${SIGNATURE_BYTES - 1}` }, signal: AbortSignal.timeout(8000) });
+  if (!response.ok || !response.body) throw new Error(`Could not read upload: ${response.status}`);
+  const reader = response.body.getReader();
+  const head = new Uint8Array(SIGNATURE_BYTES);
+  let length = 0;
+  while (length < SIGNATURE_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const take = value.subarray(0, SIGNATURE_BYTES - length);
+    head.set(take, length);
+    length += take.length;
+  }
+  await reader.cancel();
+  return head.subarray(0, length);
 }
 
 export async function removeInquiryFiles(paths: string[]) {

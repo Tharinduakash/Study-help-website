@@ -117,7 +117,7 @@ export async function deleteProject(_previous: FormState, formData: FormData): P
 
 export async function addGalleryImage(projectId: string, url: string) {
   await requireAdmin();
-  const parsed = z.object({ projectId: z.uuid(), url: z.url() }).parse({ projectId, url });
+  const parsed = z.object({ projectId: z.uuid(), url: z.url({ protocol: /^https$/ }) }).parse({ projectId, url });
   const [{ total }] = await db.select({ total: count() }).from(portfolioImages).where(eq(portfolioImages.projectId, parsed.projectId));
   await db.insert(portfolioImages).values({ ...parsed, sortOrder: total });
   revalidateSite();

@@ -5,9 +5,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { inquiries, inquiryAttachments, serviceCategories, services } from "@/db/schema";
 import { notifyAdmin } from "@/lib/email";
+import { contentMatchesName } from "@/lib/file-signature";
 import { MAX_FILES, fileError, inquirySchema, type InquiryState } from "@/lib/inquiry-schema";
 import { clientKey, consumeRateLimit } from "@/lib/rate-limit";
-import { listInquiryUploads, newUploadId, removeInquiryFiles, signInquiryUpload, storageConfigured } from "@/lib/storage";
+import { listInquiryUploads, newUploadId, readInquiryFileHead, removeInquiryFiles, signInquiryUpload, storageConfigured } from "@/lib/storage";
 
 const fileList = z.array(z.object({ name: z.string().min(1).max(200), size: z.number().int().positive() })).min(1).max(MAX_FILES);
 
@@ -75,7 +76,9 @@ export async function submitInquiry(_previous: InquiryState, formData: FormData)
       : [];
 
     const files = uploadId.success ? await listInquiryUploads(uploadId.data) : [];
-    const rejected = files.length > MAX_FILES ? files : files.filter((file) => fileError(file));
+    // Name and size first, then the file's actual bytes, so a renamed file cannot slip through.
+    const checks = files.length > MAX_FILES ? files.map(() => false) : await Promise.all(files.map(async (file) => !fileError(file) && contentMatchesName(file.name, await readInquiryFileHead(file.path))));
+    const rejected = files.filter((_, index) => !checks[index]);
     if (rejected.length > 0) {
       await removeInquiryFiles(rejected.map((file) => file.path));
       return { status: "error", message: "One of your files was rejected. Please check its type and size, then try again." };

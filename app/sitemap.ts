@@ -13,7 +13,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/contact",
     "/faq",
     "/quote",
-    "/review",
     "/privacy",
     "/terms",
     ...categories.flatMap((category) => [

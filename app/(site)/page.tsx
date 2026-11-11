@@ -5,7 +5,7 @@ import { Hero } from "@/components/home/Hero";
 import { ParallaxImage } from "@/components/home/ParallaxImage";
 import { ProcessJourney } from "@/components/home/ProcessJourney";
 import { ServiceAccordion } from "@/components/home/ServiceAccordion";
-import { TestimonialCarousel } from "@/components/home/TestimonialCarousel";
+import { ReviewsSection } from "@/components/home/ReviewsSection";
 import { ProjectCard } from "@/components/portfolio/ProjectCard";
 import { Accordion } from "@/components/shared/Accordion";
 import { Reveal, RevealHeading } from "@/components/shared/Reveal";
@@ -122,11 +122,7 @@ export default async function HomePage() {
         <ProcessJourney steps={processSteps} />
       </Section>
 
-      {testimonials.length > 0 && (
-        <Section eyebrow="Customer stories" title="What our customers say.">
-          <TestimonialCarousel items={testimonials} />
-        </Section>
-      )}
+      <ReviewsSection items={testimonials} services={categories.map((category) => category.title)} />
 
       <Section>
         <div className="grid gap-10 lg:grid-cols-[1fr_1.6fr] lg:gap-16">

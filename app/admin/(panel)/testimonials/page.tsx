@@ -5,20 +5,20 @@ import { Badge, EmptyState, PageHeader, Panel } from "@/components/admin/ui";
 import { setTestimonialStatus } from "@/lib/admin/actions";
 import { listTestimonials } from "@/lib/admin/queries";
 
-export const metadata: Metadata = { title: "Testimonials" };
+export const metadata: Metadata = { title: "Reviews" };
 
 export default async function TestimonialsAdminPage() {
   const reviews = await listTestimonials();
   return (
     <>
-      <PageHeader title="Testimonials" lead="Customers can submit reviews at /review. Only approved reviews appear publicly." action={{ href: "/admin/testimonials/new", label: "New review" }} />
+      <PageHeader title="Reviews" lead="Customers submit reviews from the home page. New reviews wait here as pending; only approved ones appear on the site." action={{ href: "/admin/testimonials/new", label: "New review" }} />
       <Panel>
         {reviews.length === 0 ? <EmptyState>No reviews yet. Only add genuine, approved feedback.</EmptyState> : (
           <ul className="divide-y divide-aqua/10">
             {reviews.map((review) => (
               <li key={review.id} className="py-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Link href={`/admin/testimonials/${review.id}`} className="font-medium hover:underline">{review.name} · {review.service} · {review.rating}/5</Link>
+                  <Link href={`/admin/testimonials/${review.id}`} className="font-medium hover:underline">{review.name} · {review.service} · <span className="text-amber-300" aria-label={`${review.rating} out of 5`}>{"★".repeat(review.rating)}<span className="text-aqua/25">{"★".repeat(5 - review.rating)}</span></span></Link>
                   <Badge>{review.status}</Badge>
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-mist">{review.quote}</p>

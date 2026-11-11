@@ -32,7 +32,7 @@ export async function Footer() {
       <div className="mx-auto mt-12 flex max-w-6xl flex-col justify-between gap-3 border-t border-aqua/10 pt-6 text-xs text-mist sm:flex-row">
         <p>© {siteConfig.name}. All rights reserved.</p>
         <p className="flex flex-wrap gap-5">
-          <Link href="/review" className="hover:text-white">Leave a Review</Link>
+          <Link href="/#reviews" className="hover:text-white">Leave a Review</Link>
           <Link href="/privacy" className="hover:text-white">Privacy Policy</Link>
           <Link href="/terms" className="hover:text-white">Terms and Conditions</Link>
         </p>
